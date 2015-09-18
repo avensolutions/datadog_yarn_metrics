@@ -19,4 +19,4 @@ Collects application metrics from YARN and publishes these to DataDog.
 
 
 ### Dependencies
-
+* DataDog Agent 

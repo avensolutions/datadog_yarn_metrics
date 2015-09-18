@@ -1,12 +1,6 @@
 init_config:
-  default_timeout: 8
-  # TODO default_query_type: A
+# Not Required
 
 instances:
-  - nameserver: 10.1.1.10
-    query: host-02.company.com
-    answer: 10.1.1.11
-
-  - nameserver: 10.1.1.11
-    query: host-01.company.com
-    answer: 10.1.1.10
+# Each instance requires a resourcemanager_uri (eg "resource-manager:8088").
+  - resourcemanager_uri: "resource-manager:8088"
