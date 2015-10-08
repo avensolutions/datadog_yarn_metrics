@@ -1,14 +1,85 @@
 from checks import AgentCheck
 from urllib2 import urlopen, URLError, HTTPError
 import json, re, time, urllib2
+from itertools import groupby
 
 class YARNMetrics(AgentCheck):
 	"""Collect metrics on applications running in YARN via the RM REST API
 	https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/ResourceManagerRest.html#Cluster_Applications_API
 	User regex and queue names are specific to your environment and should be updated in the check method of this class
+	
+	Datadog metrics:
+		yarn.apps.running								(Desc: COUNT of ALL running applications, Tags:	None)		
+		yarn.apps.running.submittype					(Desc: COUNT by SubmitType, Tags: submittype:BATCH|INTERACTIVE)
+		yarn.apps.running.allocatedGB					(Desc: SUM allocatedGB, Tags: None)		
+		yarn.apps.running.allocatedVCores				(Desc: SUM allocatedVCores, Tags: None)		
+		yarn.apps.running.runningContainers				(Desc: SUM runningContainers, Tags:	None)		
+		yarn.apps.running.maxElapsedTime				(Desc: MAX ElapsedTime, Tags: None)		
+		yarn.apps.running.maxAllocatedGB				(Desc: MAX allocatedGB, Tags: None)		
+		yarn.apps.running.maxAllocatedVCores			(Desc: MAX allocatedVCores, Tags: None)		
+		yarn.apps.running.maxRunningContainers			(Desc: MAX RunningContainers, Tags:	None)		
+		yarn.apps.running.maxMemorySeconds				(Desc: MAX MemorySeconds, Tags:	None)		
+		yarn.apps.running.maxVCoreSeconds				(Desc: MAX VCoreSeconds, Tags: None)		
+		yarn.apps.running.apptype						(Desc: COUNT by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.queue							(Desc: COUNT by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.allocatedGB.byQueue			(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.allocatedGB.byAppType			(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.allocatedVCores.byQueue		(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.allocatedVCores.byAppType		(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.runningContainers.byQueue		(Desc: COUNT by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.runningContainers.byAppType	(Desc: COUNT by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.totalMemorySeconds.byQueue	(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.totalMemorySeconds.byAppType	(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.totalVCoreSeconds.byQueue		(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.totalVCoreSeconds.byAppType	(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+
 	"""
 	
 	event_type = 'yarn_metrics_collection'
+	basetags = [self.event_type]
+
+	def setmetric(self, metricname, metricvalue, metrictags, host):
+		tags = list(self.basetags)
+		tags.extend(metrictags)
+		self.gauge(
+			metric=metricname, 
+			value=metricvalue, 
+			tags=tags, 
+			hostname=host)
+		
+	def metricsbycontext(self, context, context_sorted_list, host):
+		if context == 'queue':
+			metric_suffix = 'byQueue'
+		elif context == 'apptype':
+			metric_suffix = 'byAppType'
+		for key, group in groupby(context_sorted_list, lambda x: x[0]):
+			totmem = 0
+			totcores = 0
+			totcontainers = 0
+			totmemsecs = 0
+			totvcoresecs = 0
+			count = 0
+			for groupitm in group:
+				count += 1
+				totmem += groupitm[2]
+				totcores += groupitm[3]
+				totcontainers += groupitm[4]
+				totmemsecs += groupitm[5]
+				totvcoresecs += groupitm[6]
+			# context, numrunningapps, totalmem, totalcores, totalcontainers, totmemsecs, totvcoresecs
+			# context
+			self.setmetric('yarn.apps.running.' + context, count, [context + ":" + key], host)
+			# allocatedGB
+			self.setmetric('yarn.apps.running.allocatedGB.' + metric_suffix, totmem/1000, [context + ":" + key], host)
+			# allocatedVCores
+			self.setmetric('yarn.apps.running.allocatedVCores.' + metric_suffix, totcores, [context + ":" + key], host)
+			# runningContainers
+			self.setmetric('yarn.apps.running.runningContainers.' + metric_suffix, totcontainers, [context + ":" + key], host)
+			# totalmemoryseconds
+			self.setmetric('yarn.apps.running.totalMemorySeconds.' + metric_suffix, totmemsecs, [context + ":" + key], host)
+			# totalvcoreseconds
+			self.setmetric('yarn.apps.running.totalVCoreSeconds.' + metric_suffix, totvcoresecs, [context + ":" + key], host)	
+
 
 	def check(self, instance):
 
@@ -27,177 +98,101 @@ class YARNMetrics(AgentCheck):
 			# get data
 			apps_resp = urllib2.urlopen(apps_url)
 			apps_json_obj = json.load(apps_resp)
-
-			# initialize counters
+			
 			total_interactive_apps = 0
 			total_batch_apps = 0
-			total_default_queue = 0
-			total_prod_queue = 0
-			total_prodtact_queue = 0
-			total_development_queue = 0
-			total_mr_apps = 0
-			total_tez_apps = 0
-			total_spark_apps = 0
-			total_allocatedMB = 0
-			total_allocatedVCores = 0
-			total_runningContainers = 0
-			total_allocatedMB_prod = 0
-			total_allocatedMB_prodtact = 0
-			total_allocatedMB_dev = 0
-			total_allocatedMB_def = 0
-
-			# increment counters
+			queues_list = []
+			apptypes_list = []
+			elapsedTime_list = []
+			allocatedMB_list = []
+			allocatedVCores_list = []
+			runningContainers_list = []
+			memorySeconds_list = []
+			vcoreSeconds_list = []
 			for i in apps_json_obj['apps']['app']:
-				# Interactive vs batch applications
 				user = i['user']
 				if user_pattern_regex.match(user):
 					total_interactive_apps += 1
 				else:
-					total_batch_apps += 1 
-				#
-				# Queues will vary by environment				
-				#
-				queue = i['queue']
-				if queue == 'default':
-					total_default_queue += 1
-					total_allocatedMB_def += i['allocatedMB']
-				elif queue == 'production':
-					total_prod_queue += 1
-					total_allocatedMB_prod += i['allocatedMB']
-				elif queue == 'prodtactical':
-					total_prodtact_queue += 1	
-					total_allocatedMB_prodtact += i['allocatedMB']
-				elif queue == 'development':
-					total_development_queue += 1
-					total_allocatedMB_dev += i['allocatedMB']
-				#
-				# Add additional YARN application types as necessary
-				#				
+					total_batch_apps += 1
 				applicationType = i['applicationType']
-				if applicationType == 'MAPREDUCE':
-					total_mr_apps += 1
-				elif applicationType == 'TEZ':
-					total_tez_apps += 1
-				elif applicationType == 'SPARK':	
-					total_spark_apps += 1	
-				# total_allocatedMB
-				total_allocatedMB += i['allocatedMB']
-				# total_allocatedVCores
-				total_allocatedVCores += i['allocatedVCores']
-				# total_runningContainers
-				total_runningContainers += i['runningContainers']
-			
-			total_allocatedTB = (float(total_allocatedMB)/1024)/1024
-			
+				queue = i['queue']
+				elapsedTime = i['elapsedTime']
+				allocatedMB = i['allocatedMB']
+				allocatedVCores = i['allocatedVCores']
+				runningContainers = i['runningContainers']
+				memorySeconds = i['memorySeconds']
+				vcoreSeconds = i['vcoreSeconds']
+				apptypes_list.append(applicationType)
+				queues_list.append(queue)
+				elapsedTime_list.append(elapsedTime)
+				allocatedMB_list.append(allocatedMB)
+				allocatedVCores_list.append(allocatedVCores)
+				runningContainers_list.append(runningContainers)
+				memorySeconds_list.append(memorySeconds)
+				vcoreSeconds_list.append(vcoreSeconds)
+			queues_zipped_list = zip(queues_list, elapsedTime_list, allocatedMB_list, allocatedVCores_list, runningContainers_list, memorySeconds_list, vcoreSeconds_list)
+			apptypes_zipped_list = zip(apptypes_list, elapsedTime_list, allocatedMB_list, allocatedVCores_list, runningContainers_list, memorySeconds_list, vcoreSeconds_list)
 			#
-			# Post metrics
+			# System wide metrics
 			#
-			
-			# yarn.apps.running.TOTAL
+
+			# [yarn.apps.running] 
 			total_apps = len(apps_json_obj['apps']['app'])
-			self.gauge(
-				metric='yarn.apps.running.TOTAL', 
-				value=total_apps, 
-				tags=[self.event_type, 'apptype:TOTAL'], 
-				hostname=rmhost)
-			
-			# yarn.apps.running.INTERACTIVE, yarn.apps.running.BATCH	
-			self.gauge(
-				metric='yarn.apps.running', 
-				value=total_interactive_apps, 
-				tags=[self.event_type, 'apptype:INTERACTIVE', 'submittype:INTERACTIVE'], 
-				hostname=rmhost)				
-			self.gauge(
-				metric='yarn.apps.running', 
-				value=total_batch_apps, 
-				tags=[self.event_type, 'apptype:BATCH', 'submittype:BATCH'], 
-				hostname=rmhost)
-					
-			# yarn.apps.running.queue
-			self.gauge(
-				metric='yarn.apps.running.queue', 
-				value=total_default_queue, 
-				tags=[self.event_type, 'queuename:default'], 
-				hostname=rmhost)			
-			self.gauge(
-				metric='yarn.apps.running.queue', 
-				value=total_prod_queue, 
-				tags=[self.event_type, 'queuename:production'], 
-				hostname=rmhost)
-			self.gauge(
-				metric='yarn.apps.running.queue', 
-				value=total_prodtact_queue, 
-				tags=[self.event_type, 'queuename:prodtactical'], 
-				hostname=rmhost)				
-			self.gauge(
-				metric='yarn.apps.running.queue', 
-				value=total_development_queue, 
-				tags=[self.event_type, 'queuename:development'], 
-				hostname=rmhost)					
+			self.setmetric('yarn.apps.running', total_apps, [], rmhost)
 
-			# yarn.apps.running.MR
-			self.gauge(
-				metric='yarn.apps.running.MR', 
-				value=total_mr_apps, 
-				tags=[self.event_type, 'apptype:MR'], 
-				hostname=rmhost)				
+			# [yarn.apps.running.submittype]
+			self.setmetric('yarn.apps.running.submittype', total_batch_apps, ["submittype:BATCH"], rmhost)
+			self.setmetric('yarn.apps.running.submittype', total_interactive_apps, ["submittype:INTERACTIVE"], rmhost)
 
-			# yarn.apps.running.TEZ
-			self.gauge(
-				metric='yarn.apps.running.TEZ', 
-				value=total_tez_apps, 
-				tags=[self.event_type, 'apptype:TEZ'], 
-				hostname=rmhost)					
+			# [yarn.apps.running.allocatedGB]
+			allocatedGB = sum(l[2] for l in queues_zipped_list)/1000
+			self.setmetric('yarn.apps.running.allocatedGB', allocatedGB, [], rmhost)
 
-			# yarn.apps.running.SPARK
-			self.gauge(
-				metric='yarn.apps.running.SPARK', 
-				value=total_spark_apps, 
-				tags=[self.event_type, 'apptype:SPARK'], 
-				hostname=rmhost)
+			# [yarn.apps.running.allocatedVCores]
+			allocatedVCores = sum(l[3] for l in queues_zipped_list)
+			self.setmetric('yarn.apps.running.allocatedVCores', allocatedVCores, [], rmhost)
 
-			# yarn.apps.running.allocatedTB
-			self.gauge(
-				metric='yarn.apps.running.allocatedTB', 
-				value=total_allocatedTB, 
-				tags=[self.event_type, 'appmetric:allocatedTB'], 
-				hostname=rmhost)
+			# [yarn.apps.running.runningContainers]
+			runningContainers = sum(l[4] for l in queues_zipped_list)
+			self.setmetric('yarn.apps.running.runningContainers', runningContainers, [], rmhost)
 
-			# yarn.apps.running.allocatedGB.queue
-			self.gauge(
-				metric='yarn.apps.running.allocatedGB.queue', 
-				value=float(total_allocatedMB_def)/1024, 
-				tags=[self.event_type, 'queuename:default'], 
-				hostname=rmhost)
-			self.gauge(
-				metric='yarn.apps.running.allocatedGB.queue', 
-				value=float(total_allocatedMB_prod)/1024, 
-				tags=[self.event_type, 'queuename:production'], 
-				hostname=rmhost)
-			self.gauge(
-				metric='yarn.apps.running.allocatedGB.queue', 
-				value=float(total_allocatedMB_prodtact)/1024, 
-				tags=[self.event_type, 'queuename:prodtactical'], 
-				hostname=rmhost)
-			self.gauge(
-				metric='yarn.apps.running.allocatedGB.queue', 
-				value=float(total_allocatedMB_dev)/1024, 
-				tags=[self.event_type, 'queuename:development'], 
-				hostname=rmhost)
+			# [yarn.apps.running.maxElapsedTime]
+			maxelapsedtime = max(l[1] for l in queues_zipped_list)
+			self.setmetric('yarn.apps.running.maxElapsedTime', maxelapsedtime, [], rmhost)
 
-			# yarn.apps.running.allocatedVCores
-			self.gauge(
-				metric='yarn.apps.running.allocatedVCores', 
-				value=total_allocatedVCores, 
-				tags=[self.event_type, 'appmetric:allocatedVCores'], 
-				hostname=rmhost)
+			# [yarn.apps.running.maxAllocatedGB]
+			maxallocatedGB = max(l[2] for l in queues_zipped_list)/1000
+			self.setmetric('yarn.apps.running.maxAllocatedGB', maxallocatedGB, [], rmhost)
 
-			# yarn.apps.running.runningContainers
-			self.gauge(
-				metric='yarn.apps.running.runningContainers', 
-				value=total_runningContainers, 
-				tags=[self.event_type, 'appmetric:runningContainers'], 
-				hostname=rmhost)
+			# [yarn.apps.running.maxAllocatedVCores]
+			maxallocatedVCores = max(l[3] for l in queues_zipped_list)
+			self.setmetric('yarn.apps.running.maxAllocatedVCores', maxallocatedVCores, [], rmhost)
+
+			# [yarn.apps.running.maxRunningContainers]
+			maxcontainers = max(l[4] for l in queues_zipped_list)
+			self.setmetric('yarn.apps.running.maxRunningContainers', maxcontainers, [], rmhost)
+
+			# [yarn.apps.running.maxMemorySeconds]
+			maxmemoryseconds = max(l[5] for l in queues_zipped_list)
+			self.setmetric('yarn.apps.running.maxMemorySeconds', maxmemoryseconds, [], rmhost)
+
+			# [yarn.apps.running.maxVCoreSeconds]
+			maxvcoreseconds = max(l[5] for l in queues_zipped_list)
+			self.setmetric('yarn.apps.running.maxVCoreSeconds', maxvcoreseconds, [], rmhost)
+
+			#
+			# by queue
+			#
+			sorted_by_queue = sorted(queues_zipped_list, key=lambda tup: tup[0])
+			self.metricsbycontext('queue', sorted_by_queue, rmhost)
+
+			#
+			# by apptype
+			#
+
+			sorted_by_apptype = sorted(apptypes_zipped_list, key=lambda tup: tup[0])
+			self.metricsbycontext('apptype', sorted_by_apptype, rmhost)			
 
 		except HTTPError, e:
 			err_msg = 'HTTPError %s Returned From \'%s\'' % (e.code, rmhost)
