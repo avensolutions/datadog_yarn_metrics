@@ -3,24 +3,30 @@ Collects application metrics from YARN and publishes these to DataDog.
 
 
 ### Metrics collected
-	Metric name: yarn.apps.running
-		Tags:
-			apptype:TOTAL
-			appscope:queue|apptype|all
-			apptype:<applicationType> (eg MR, SPARK, TEZ)
-			submittype:INTERACTIVE|BATCH
-			queuename:<queue> (eg deafult, production)
-			appmetric:allocatedGB (by system by queue and by apptype)
-			appmetric:allocatedVCores (by system by queue and by apptype)
-			appmetric:runningContainers (by system by queue and by apptype)
-			appmetric:totmemsecs (by queue and by apptype)
-			appmetric:totvcoresecs (by queue and by apptype)
-			appmetric:maxmemoryseconds (by system)
-			appmetric:maxvcoreseconds (by system)
-			appmetric:maxelapsedtime (by system)
-			appmetric:maxallocatedGB (by system)
-			appmetric:maxallocatedVCores (by system)
-			appmetric:maxcontainers (by system)
+	Datadog metrics:
+		yarn.apps.running								(Desc: COUNT of ALL running applications, Tags:	None)		
+		yarn.apps.running.submittype					(Desc: COUNT by SubmitType, Tags: submittype:BATCH|INTERACTIVE)
+		yarn.apps.running.allocatedGB					(Desc: SUM allocatedGB, Tags: None)		
+		yarn.apps.running.allocatedVCores				(Desc: SUM allocatedVCores, Tags: None)		
+		yarn.apps.running.runningContainers				(Desc: SUM runningContainers, Tags:	None)		
+		yarn.apps.running.maxElapsedTime				(Desc: MAX ElapsedTime, Tags: None)		
+		yarn.apps.running.maxAllocatedGB				(Desc: MAX allocatedGB, Tags: None)		
+		yarn.apps.running.maxAllocatedVCores			(Desc: MAX allocatedVCores, Tags: None)		
+		yarn.apps.running.maxRunningContainers			(Desc: MAX RunningContainers, Tags:	None)		
+		yarn.apps.running.maxMemorySeconds				(Desc: MAX MemorySeconds, Tags:	None)		
+		yarn.apps.running.maxVCoreSeconds				(Desc: MAX VCoreSeconds, Tags: None)		
+		yarn.apps.running.apptype						(Desc: COUNT by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.queue							(Desc: COUNT by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.allocatedGB.byQueue			(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.allocatedGB.byAppType			(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.allocatedVCores.byQueue		(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.allocatedVCores.byAppType		(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.runningContainers.byQueue		(Desc: COUNT by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.runningContainers.byAppType	(Desc: COUNT by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.totalMemorySeconds.byQueue	(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.totalMemorySeconds.byAppType	(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.running.totalVCoreSeconds.byQueue		(Desc: SUM by Queue, Tags: queue:{default, production, etc})
+		yarn.apps.running.totalVCoreSeconds.byAppType	(Desc: SUM by AppType, Tags: apptype:{MR, TEZ, SPARK, etc})
 	
 ### Dependencies
 * DataDog Agent 
