@@ -9,6 +9,7 @@ class YARNMetrics(AgentCheck):
 	User regex and queue names are specific to your environment and should be updated in the check method of this class
 	
 	Datadog metrics:
+		yarn.apps.queued								(Desc: COUNT of ALL queued applications, Tags:	None)
 		yarn.apps.running								(Desc: COUNT of ALL running applications, Tags:	None)		
 		yarn.apps.running.submittype					(Desc: COUNT by SubmitType, Tags: submittype:BATCH|INTERACTIVE)
 		yarn.apps.running.allocatedGB					(Desc: SUM allocatedGB, Tags: None)		
@@ -37,6 +38,16 @@ class YARNMetrics(AgentCheck):
 	
 	event_type = 'yarn_metrics_collection'
 	basetags = [self.event_type]
+	
+	def get_num_apps(self, rm_uri, state):
+		num_apps_url = "http://" + rm_uri + "/ws/v1/cluster/apps?state=" + state
+		num_apps_resp = urllib2.urlopen(num_apps_url)
+		num_apps_json_obj = json.load(num_apps_resp)
+		no_apps = 0
+		if num_apps_json_obj['apps'] is not None:
+			if num_apps_json_obj['apps']['app'] is not None:
+				no_apps = len(num_apps_json_obj['apps']['app'])
+		return no_apps
 
 	def setmetric(self, metricname, metricvalue, metrictags, host):
 		tags = list(self.basetags)
@@ -92,10 +103,14 @@ class YARNMetrics(AgentCheck):
 		user_pattern_regex = re.compile(user_pattern)
 
 		try:
+		
+			# Get queued apps
+			queued_apps = get_num_apps(resourcemanager_uri, 'NEW') + get_num_apps(resourcemanager_uri, 'NEW_SAVING') + get_num_apps(resourcemanager_uri, 'SUBMITTED') + get_num_apps(resourcemanager_uri, 'ACCEPTED')
+			self.setmetric('yarn.apps.queued', queued_apps, [], rmhost)
+		
+			# Get running apps		
 			apps_url = "http://" + resourcemanager_uri + "/ws/v1/cluster/apps?state=RUNNING"
 			rmhost = resourcemanager_uri.split(":")[0]
-
-			# get data
 			apps_resp = urllib2.urlopen(apps_url)
 			apps_json_obj = json.load(apps_resp)
 			

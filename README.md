@@ -4,6 +4,7 @@ Collects application metrics from YARN and publishes these to DataDog.
 
 ### Metrics collected
 	Datadog metrics:
+		yarn.apps.queued								(Desc: COUNT of ALL queued applications, Tags:	None)
 		yarn.apps.running								(Desc: COUNT of ALL running applications, Tags:	None)		
 		yarn.apps.running.submittype					(Desc: COUNT by SubmitType, Tags: submittype:BATCH|INTERACTIVE)
 		yarn.apps.running.allocatedGB					(Desc: SUM allocatedGB, Tags: None)		
