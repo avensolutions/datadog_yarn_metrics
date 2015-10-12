@@ -37,7 +37,7 @@ class YARNMetrics(AgentCheck):
 	"""
 	
 	event_type = 'yarn_metrics_collection'
-	basetags = [self.event_type]
+	basetags = [event_type]
 	
 	def get_num_apps(self, rm_uri, state):
 		num_apps_url = "http://" + rm_uri + "/ws/v1/cluster/apps?state=" + state
@@ -104,16 +104,16 @@ class YARNMetrics(AgentCheck):
 
 		try:
 		
-			# Get queued apps
-			queued_apps = get_num_apps(resourcemanager_uri, 'NEW') + get_num_apps(resourcemanager_uri, 'NEW_SAVING') + get_num_apps(resourcemanager_uri, 'SUBMITTED') + get_num_apps(resourcemanager_uri, 'ACCEPTED')
-			self.setmetric('yarn.apps.queued', queued_apps, [], rmhost)
-		
 			# Get running apps		
 			apps_url = "http://" + resourcemanager_uri + "/ws/v1/cluster/apps?state=RUNNING"
 			rmhost = resourcemanager_uri.split(":")[0]
 			apps_resp = urllib2.urlopen(apps_url)
 			apps_json_obj = json.load(apps_resp)
 			
+			# Get queued apps
+			queued_apps = self.get_num_apps(resourcemanager_uri, 'NEW') + self.get_num_apps(resourcemanager_uri, 'NEW_SAVING') + self.get_num_apps(resourcemanager_uri, 'SUBMITTED') + self.get_num_apps(resourcemanager_uri, 'ACCEPTED')
+			self.setmetric('yarn.apps.queued', queued_apps, [], rmhost)
+
 			total_interactive_apps = 0
 			total_batch_apps = 0
 			queues_list = []
