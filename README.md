@@ -1,6 +1,9 @@
 ## DataDog Collect YARN Metrics
 Collects application metrics from YARN and publishes these to DataDog.  
 
+### Example DataDog YARN Metrics Dashboard
+
+![datadog-screenshot](https://s3.amazonaws.com/avensolutions-images/Datadog_Dashboard.png)
 
 ### Metrics collected
 	Datadog metrics:
