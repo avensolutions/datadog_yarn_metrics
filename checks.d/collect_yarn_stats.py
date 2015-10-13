@@ -94,14 +94,15 @@ class YARNMetrics(AgentCheck):
 
 	def check(self, instance):
 
-		# update this for your environment to distinguish user submitted queries from batch queries, example u123456 may represent a human user
-		user_pattern = "^[cd]\d{6}"
-		
 		resourcemanager_uri = instance.get('resourcemanager_uri', None)
+		
 		if resourcemanager_uri is None:
 			raise Exception("resourcemanager_uri must be specified")
-		user_pattern_regex = re.compile(user_pattern)
 
+		# update this for your environment to distinguish user submitted queries from batch queries, example u123456 may represent a human user
+		user_pattern = self.init_config.get('user_pattern', '.*')
+		user_pattern_regex = re.compile(user_pattern)
+			
 		try:
 		
 			# Get running apps		
@@ -132,7 +133,10 @@ class YARNMetrics(AgentCheck):
 					total_batch_apps += 1
 				applicationType = i['applicationType']
 				queue = i['queue']
-				elapsedTime = i['elapsedTime']
+				if i['name'] == 'Spark shell':
+					elapsedTime = 0
+				else:	
+					elapsedTime = i['elapsedTime']
 				allocatedMB = i['allocatedMB']
 				allocatedVCores = i['allocatedVCores']
 				runningContainers = i['runningContainers']
@@ -151,7 +155,7 @@ class YARNMetrics(AgentCheck):
 			#
 			# System wide metrics
 			#
-
+			
 			# [yarn.apps.running] 
 			total_apps = len(apps_json_obj['apps']['app'])
 			self.setmetric('yarn.apps.running', total_apps, [], rmhost)

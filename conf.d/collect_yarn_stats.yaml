@@ -1,6 +1,5 @@
 init_config:
-# Not Required
+  user_pattern: '^[cd]\d{6}'
 
 instances:
-# Each instance requires a resourcemanager_uri (eg "resource-manager:8088").
-  - resourcemanager_uri: "resource-manager:8088"
+  - resourcemanager_uri: 'resource-manager:8088'
