@@ -10,6 +10,18 @@ class YARNMetrics(AgentCheck):
 	
 	Datadog metrics:
 		yarn.apps.queued								(Desc: COUNT of ALL queued applications, Tags:	None)
+		yarn.apps.failed								(Desc: COUNT of ALL failed applications (evaluated hourly), Tags:	None)
+		yarn.apps.failed.byQueue						(Desc: COUNT of failed applications by Queue (evaluated hourly), Tags:	queue:{default, production, etc})
+		yarn.apps.failed.byAppType						(Desc: COUNT of failed applications by AppType (evaluated hourly), Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.failed.byUser							(Desc: COUNT of failed applications by User (evaluated hourly), Tags: user:{u12345, etc}
+		yarn.apps.succeeded								(Desc: COUNT of ALL succeeded applications (evaluated hourly), Tags:	None)
+		yarn.apps.succeeded.byQueue						(Desc: COUNT of succeeded applications by Queue (evaluated hourly), Tags:	queue:{default, production, etc})
+		yarn.apps.succeeded.byAppType					(Desc: COUNT of succeeded applications by AppType (evaluated hourly), Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.succeeded.byUser						(Desc: COUNT of succeeded applications by User (evaluated hourly), Tags: user:{u12345, etc}
+		yarn.apps.killed								(Desc: COUNT of ALL killed applications (evaluated hourly), Tags:	None)
+		yarn.apps.killed.byQueue						(Desc: COUNT of killed applications by Queue (evaluated hourly), Tags:	queue:{default, production, etc})
+		yarn.apps.killed.byAppType						(Desc: COUNT of killed applications by AppType (evaluated hourly), Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.killed.byUser							(Desc: COUNT of killed applications by User (evaluated hourly), Tags: user:{u12345, etc}		
 		yarn.apps.running								(Desc: COUNT of ALL running applications, Tags:	None)		
 		yarn.apps.running.submittype					(Desc: COUNT by SubmitType, Tags: submittype:BATCH|INTERACTIVE)
 		yarn.apps.running.allocatedGB					(Desc: SUM allocatedGB, Tags: None)		
@@ -91,6 +103,54 @@ class YARNMetrics(AgentCheck):
 			# totalvcoreseconds
 			self.setmetric('yarn.apps.running.totalVCoreSeconds.' + metric_suffix, totvcoresecs, [context + ":" + key], host)	
 
+	#SUCCEEDED, FAILED, KILLED
+	def comp_apps_count(self, rm, final_status, last_hour_ms_in):
+		final_status_uc = final_status.upper() 
+		rmhost = rm.split(":")[0]
+		comp_apps_queues_list = []
+		comp_apps_apptypes_list = []
+		comp_apps_user_list = []
+		comp_apps_url = "http://" + rm + "/ws/v1/cluster/apps?finalStatus=" + final_status_uc	 
+		comp_apps_resp = urllib2.urlopen(comp_apps_url)
+		comp_apps_json_obj = json.load(comp_apps_resp)
+		for i in comp_apps_json_obj['apps']['app']:
+			finishedTime = i['finishedTime']
+			if finishedTime >= last_hour_ms_in: 
+				user = i['user']
+				queue = i['queue']
+				applicationType = i['applicationType']
+				comp_apps_queues_list.append(queue)
+				comp_apps_apptypes_list.append(applicationType)
+				comp_apps_user_list.append(user)
+
+		comp_apps_list = zip(comp_apps_queues_list, comp_apps_apptypes_list, comp_apps_user_list)
+
+		no_comp_apps = len(comp_apps_list)
+		self.gauge('yarn.apps.' + final_status, no_comp_apps, timestamp=last_hour_ms_in, tags=None, hostname=rmhost)
+
+		# yarn.apps.failed.byQueue
+		comp_sorted_by_queue = sorted(comp_apps_list, key=lambda tup: tup[0])
+		for key, group in groupby(comp_sorted_by_queue, lambda x: x[0]):
+			count = 0
+			for groupitm in group:
+				count += 1	
+			self.gauge('yarn.apps.' + final_status + '.byQueue', count, timestamp=last_hour_ms_in, tags=["queue:" + key], hostname=rmhost)	
+
+		# yarn.apps.failed.byAppType
+		comp_sorted_by_apptype = sorted(comp_apps_list, key=lambda tup: tup[1])
+		for key, group in groupby(comp_sorted_by_apptype, lambda x: x[1]):
+			count = 0
+			for groupitm in group:
+				count += 1				
+			self.gauge('yarn.apps.' + final_status + '.byAppType', count, timestamp=last_hour_ms_in, tags=["apptype:" + key], hostname=rmhost)		
+			
+		# yarn.apps.failed.byUser	
+		comp_sorted_by_user = sorted(comp_apps_list, key=lambda tup: tup[2])
+		for key, group in groupby(comp_sorted_by_user, lambda x: x[2]):
+			count = 0
+			for groupitm in group:
+				count += 1				
+			self.gauge('yarn.apps.' + final_status + '.byUser', count, timestamp=last_hour_ms_in, tags=["user:" + key], hostname=rmhost)
 
 	def check(self, instance):
 
@@ -114,7 +174,18 @@ class YARNMetrics(AgentCheck):
 			# Get queued apps
 			queued_apps = self.get_num_apps(resourcemanager_uri, 'NEW') + self.get_num_apps(resourcemanager_uri, 'NEW_SAVING') + self.get_num_apps(resourcemanager_uri, 'SUBMITTED') + self.get_num_apps(resourcemanager_uri, 'ACCEPTED')
 			self.setmetric('yarn.apps.queued', queued_apps, [], rmhost)
-
+			
+			# Get failed apps
+			t0 = time.time()
+			tm = time.localtime(t0)
+			now = int(t0) * 1000
+			last_hour_ms = (int(t0) * 1000) - 3600000 
+			if (tm[4] == 00):
+				self.comp_apps_count(resourcemanager_uri, 'failed', last_hour_ms)		
+				self.comp_apps_count(resourcemanager_uri, 'succeeded', last_hour_ms)		
+				self.comp_apps_count(resourcemanager_uri, 'killed', last_hour_ms)	
+					
+			# iterate through running apps
 			total_interactive_apps = 0
 			total_batch_apps = 0
 			queues_list = []
