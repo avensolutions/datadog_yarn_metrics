@@ -8,6 +8,18 @@ Collects application metrics from YARN and publishes these to DataDog.
 ### Metrics collected
 	Datadog metrics:
 		yarn.apps.queued								(Desc: COUNT of ALL queued applications, Tags:	None)
+		yarn.apps.failed								(Desc: COUNT of ALL failed applications (evaluated hourly), Tags:	None)
+		yarn.apps.failed.byQueue						(Desc: COUNT of failed applications by Queue (evaluated hourly), Tags:	queue:{default, production, etc})
+		yarn.apps.failed.byAppType						(Desc: COUNT of failed applications by AppType (evaluated hourly), Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.failed.byUser							(Desc: COUNT of failed applications by User (evaluated hourly), Tags: user:{u12345, etc}
+		yarn.apps.succeeded								(Desc: COUNT of ALL succeeded applications (evaluated hourly), Tags:	None)
+		yarn.apps.succeeded.byQueue						(Desc: COUNT of succeeded applications by Queue (evaluated hourly), Tags:	queue:{default, production, etc})
+		yarn.apps.succeeded.byAppType					(Desc: COUNT of succeeded applications by AppType (evaluated hourly), Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.succeeded.byUser						(Desc: COUNT of succeeded applications by User (evaluated hourly), Tags: user:{u12345, etc}
+		yarn.apps.killed								(Desc: COUNT of ALL killed applications (evaluated hourly), Tags:	None)
+		yarn.apps.killed.byQueue						(Desc: COUNT of killed applications by Queue (evaluated hourly), Tags:	queue:{default, production, etc})
+		yarn.apps.killed.byAppType						(Desc: COUNT of killed applications by AppType (evaluated hourly), Tags: apptype:{MR, TEZ, SPARK, etc})
+		yarn.apps.killed.byUser							(Desc: COUNT of killed applications by User (evaluated hourly), Tags: user:{u12345, etc}		
 		yarn.apps.running								(Desc: COUNT of ALL running applications, Tags:	None)		
 		yarn.apps.running.submittype					(Desc: COUNT by SubmitType, Tags: submittype:BATCH|INTERACTIVE)
 		yarn.apps.running.allocatedGB					(Desc: SUM allocatedGB, Tags: None)		
