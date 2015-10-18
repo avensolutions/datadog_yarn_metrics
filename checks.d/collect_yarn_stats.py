@@ -113,44 +113,54 @@ class YARNMetrics(AgentCheck):
 		comp_apps_url = "http://" + rm + "/ws/v1/cluster/apps?finalStatus=" + final_status_uc	 
 		comp_apps_resp = urllib2.urlopen(comp_apps_url)
 		comp_apps_json_obj = json.load(comp_apps_resp)
-		for i in comp_apps_json_obj['apps']['app']:
-			finishedTime = i['finishedTime']
-			if finishedTime >= last_hour_ms_in: 
-				user = i['user']
-				queue = i['queue']
-				applicationType = i['applicationType']
-				comp_apps_queues_list.append(queue)
-				comp_apps_apptypes_list.append(applicationType)
-				comp_apps_user_list.append(user)
+		if comp_apps_json_obj['apps'] is not None:
+			if comp_apps_json_obj['apps']['app'] is not None:
+				for i in comp_apps_json_obj['apps']['app']:
+					finishedTime = i['finishedTime']
+					if finishedTime >= last_hour_ms_in: 
+						user = i['user']
+						queue = i['queue']
+						applicationType = i['applicationType']
+						comp_apps_queues_list.append(queue)
+						comp_apps_apptypes_list.append(applicationType)
+						comp_apps_user_list.append(user)
 
-		comp_apps_list = zip(comp_apps_queues_list, comp_apps_apptypes_list, comp_apps_user_list)
+				comp_apps_list = zip(comp_apps_queues_list, comp_apps_apptypes_list, comp_apps_user_list)
 
-		no_comp_apps = len(comp_apps_list)
-		self.gauge('yarn.apps.' + final_status, no_comp_apps, timestamp=last_hour_ms_in, tags=None, hostname=rmhost)
+				no_comp_apps = len(comp_apps_list)
+				#self.gauge('yarn.apps.' + final_status, no_comp_apps, timestamp=last_hour_ms_in, tags=None, hostname=rmhost)
+				#self.gauge(metric='yarn.apps.' + final_status, value=no_comp_apps, tags=None, hostname=rmhost)
+				self.setmetric('yarn.apps.' + final_status, no_comp_apps, [], rmhost)
+				
+				# yarn.apps.failed.byQueue
+				comp_sorted_by_queue = sorted(comp_apps_list, key=lambda tup: tup[0])
+				for key, group in groupby(comp_sorted_by_queue, lambda x: x[0]):
+					count = 0
+					for groupitm in group:
+						count += 1	
+					#self.gauge('yarn.apps.' + final_status + '.byQueue', count, timestamp=last_hour_ms_in, tags=["queue:" + key], hostname=rmhost)	
+					#self.gauge(metric='yarn.apps.' + final_status + '.byQueue', value=count, tags=["queue:" + key], hostname=rmhost)	
+					self.setmetric('yarn.apps.' + final_status, count, ["queue:" + key], rmhost)
 
-		# yarn.apps.failed.byQueue
-		comp_sorted_by_queue = sorted(comp_apps_list, key=lambda tup: tup[0])
-		for key, group in groupby(comp_sorted_by_queue, lambda x: x[0]):
-			count = 0
-			for groupitm in group:
-				count += 1	
-			self.gauge('yarn.apps.' + final_status + '.byQueue', count, timestamp=last_hour_ms_in, tags=["queue:" + key], hostname=rmhost)	
-
-		# yarn.apps.failed.byAppType
-		comp_sorted_by_apptype = sorted(comp_apps_list, key=lambda tup: tup[1])
-		for key, group in groupby(comp_sorted_by_apptype, lambda x: x[1]):
-			count = 0
-			for groupitm in group:
-				count += 1				
-			self.gauge('yarn.apps.' + final_status + '.byAppType', count, timestamp=last_hour_ms_in, tags=["apptype:" + key], hostname=rmhost)		
-			
-		# yarn.apps.failed.byUser	
-		comp_sorted_by_user = sorted(comp_apps_list, key=lambda tup: tup[2])
-		for key, group in groupby(comp_sorted_by_user, lambda x: x[2]):
-			count = 0
-			for groupitm in group:
-				count += 1				
-			self.gauge('yarn.apps.' + final_status + '.byUser', count, timestamp=last_hour_ms_in, tags=["user:" + key], hostname=rmhost)
+				# yarn.apps.failed.byAppType
+				comp_sorted_by_apptype = sorted(comp_apps_list, key=lambda tup: tup[1])
+				for key, group in groupby(comp_sorted_by_apptype, lambda x: x[1]):
+					count = 0
+					for groupitm in group:
+						count += 1				
+					#self.gauge('yarn.apps.' + final_status + '.byAppType', count, timestamp=last_hour_ms_in, tags=["apptype:" + key], hostname=rmhost)		
+					#self.gauge(metric='yarn.apps.' + final_status + '.byAppType', value=count, tags=["apptype:" + key], hostname=rmhost)		
+					self.setmetric('yarn.apps.' + final_status, count, ["apptype:" + key], rmhost)
+					
+				# yarn.apps.failed.byUser	
+				comp_sorted_by_user = sorted(comp_apps_list, key=lambda tup: tup[2])
+				for key, group in groupby(comp_sorted_by_user, lambda x: x[2]):
+					count = 0
+					for groupitm in group:
+						count += 1				
+					#self.gauge('yarn.apps.' + final_status + '.byUser', count, timestamp=last_hour_ms_in, tags=["user:" + key], hostname=rmhost)
+					#self.gauge(metric='yarn.apps.' + final_status + '.byUser', value=count, tags=["user:" + key], hostname=rmhost)
+					self.setmetric('yarn.apps.' + final_status, count, ["user:" + key], rmhost)
 
 	def check(self, instance):
 
